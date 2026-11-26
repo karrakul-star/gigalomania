@@ -32,6 +32,8 @@ jobs:
           cp -r TinyXML "$MAIN/jni/src/"
           mkdir -p "$MAIN/assets"
           cp -r gfx islands music sound "$MAIN/assets/"
+          cp -r gfx_android_extras/. "$MAIN/assets/gfx/"
+          test -s "$MAIN/assets/gfx/starfield.png"
           sed -i 's/register int i, j;/int i, j;/' "$MAIN/jni/src/utils.cpp"
 
       - name: Download SDL libraries
@@ -56,6 +58,10 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build-log.txt
+
+      - name: Verify game assets
+        run: |
+          python3 -c "import zipfile; z=zipfile.ZipFile('android/Gigalomania/app/build/outputs/apk/debug/app-debug.apk'); assert 'assets/gfx/starfield.png' in z.namelist(); print('Game graphics verified')"
 
       - name: Upload build log
         if: always()
