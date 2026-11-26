@@ -39,6 +39,8 @@ jobs:
           git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git SDL
           git clone --depth 1 --branch release-2.8.8 https://github.com/libsdl-org/SDL_image.git SDL_image
           git clone --depth 1 --branch release-2.8.1 https://github.com/libsdl-org/SDL_mixer.git SDL_mixer
+          git -C SDL_mixer submodule update --init --recursive --depth 1
+          git -C SDL_image submodule update --init --recursive --depth 1
 
       - name: Update SDL Java
         run: |
@@ -50,7 +52,14 @@ jobs:
         working-directory: android/Gigalomania
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build-log.txt
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-log
+          path: android/Gigalomania/build-log.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
