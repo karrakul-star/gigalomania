@@ -25,6 +25,11 @@ jobs:
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
 
+      - name: Install image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil
+
       - name: Prepare game
         run: |
           MAIN=android/Gigalomania/app/src/main
@@ -32,8 +37,27 @@ jobs:
           cp -r TinyXML "$MAIN/jni/src/"
           mkdir -p "$MAIN/assets"
           cp -r gfx islands music sound "$MAIN/assets/"
-          cp -r gfx_android_extras/. "$MAIN/assets/gfx/"
-          test -s "$MAIN/assets/gfx/starfield.png"
+          EXTRA=$(find . -type d -name gfx_android_extras -print -quit)
+          if [ -n "$EXTRA" ]; then
+            cp -r "$EXTRA/." "$MAIN/assets/gfx/"
+          fi
+          /usr/bin/python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          gfx = Path("android/Gigalomania/app/src/main/assets/gfx")
+          for p in gfx.rglob("*"):
+              if p.suffix.lower() in (".jpg", ".jpeg"):
+                  target = p.with_suffix(".png")
+                  if not target.exists():
+                      Image.open(p).convert("RGB").save(target)
+                      print("Converted:", target)
+          for name in ("starfield.png", "stars.png"):
+              p = gfx / name
+              assert p.is_file(), f"Missing {name}"
+              with Image.open(p) as im:
+                  im.verify()
+              print("Verified:", p)
+          PY
           sed -i 's/register int i, j;/int i, j;/' "$MAIN/jni/src/utils.cpp"
 
       - name: Download SDL libraries
@@ -59,9 +83,18 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build-log.txt
 
-      - name: Verify game assets
+      - name: Verify APK
         run: |
-          python3 -c "import zipfile; z=zipfile.ZipFile('android/Gigalomania/app/build/outputs/apk/debug/app-debug.apk'); assert 'assets/gfx/starfield.png' in z.namelist(); print('Game graphics verified')"
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          apk = next(Path("android/Gigalomania/app/build/outputs/apk/debug").glob("*.apk"))
+          with zipfile.ZipFile(apk) as z:
+              for name in ("assets/gfx/starfield.png", "assets/gfx/stars.png", "lib/arm64-v8a/libmain.so"):
+                  assert name in z.namelist(), f"Missing {name}"
+                  print("Verified:", name)
+          print("APK verified:", apk)
+          PY
 
       - name: Upload build log
         if: always()
